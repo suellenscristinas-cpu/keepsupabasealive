@@ -1,0 +1,28 @@
+name: Keep Supabase Alive
+
+# Faz uma consulta leve ao banco a cada 3 dias para o Supabase
+# não pausar o projeto por inatividade (limite do plano gratuito: 7 dias).
+on:
+  schedule:
+    - cron: '0 12 */3 * *'   # meio-dia UTC, a cada 3 dias
+  workflow_dispatch:         # permite rodar na mão pela aba Actions
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta leve às tabelas
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          for table in linhas produtos; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" --retry 3 --retry-delay 5 \
+              "$SUPABASE_URL/rest/v1/$table?select=id&limit=1" \
+              -H "apikey: $SUPABASE_KEY")
+            echo "$table -> HTTP $status"
+            if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+              echo "Falha ao consultar a tabela $table"
+              exit 1
+            fi
+          done
